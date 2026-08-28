@@ -1,0 +1,5 @@
+﻿  ソース.cpp
+D:\Otsuki\Otsuki\repos\Nuku\Nuku\ソース.cpp(69,47): warning C4267: '引数': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+D:\Otsuki\Otsuki\repos\Nuku\Nuku\ソース.cpp(79,47): warning C4267: '引数': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+D:\Otsuki\Otsuki\repos\Nuku\Nuku\ソース.cpp(91,47): warning C4267: '引数': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+  Nuku.vcxproj -> D:\Otsuki\Otsuki\repos\Nuku\Nuku\x64\Debug\Nuku.exe
