@@ -270,7 +270,7 @@ int APIENTRY WinMain(
 			break;
 
 		// ゲームオーバー画面の処理
-		case(OVER):
+		case OVER:
 
 			// 一時的に消音
 			ChangeVolumeSoundMem(0, bgm);
@@ -346,7 +346,7 @@ int APIENTRY WinMain(
 			break;
 
 		// マニュアル画面の処理
-		case(MANUAL):
+		case MANUAL:
 
 			if (CheckHitKey(KEY_INPUT_T) == 1)
 			{
