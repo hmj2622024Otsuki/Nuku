@@ -5,36 +5,34 @@
 #include "Nuku.h" // ヘッダーファイルをインクルード
 
 // 定数の宣言
-const int WIDTH = 960, HEIGHT = 640; // ウィンドウの幅と高さのピクセル数
-const int WHITE = GetColor(255, 255, 255); // 白
-const int RED = GetColor(255, 0, 0); // 赤
-const int BLACK = GetColor(0, 0, 0); // 黒
-const int GRAY = GetColor(128, 128, 128); // グレー
-
-enum { TITLE, PLAY, OVER }; // シーンを分けるための列挙定数
+const int WIDTH = 960, HEIGHT = 640;		// ウィンドウの幅と高さのピクセル数
+const int WHITE = GetColor(255, 255, 255);	// 白
+const int RED = GetColor(255, 0, 0);		// 赤
+const int BLACK = GetColor(0, 0, 0);		// 黒
+const int GRAY = GetColor(128, 128, 128);	// グレー
+enum { TITLE, PLAY, OVER, MANUAL };			// シーンを分けるための列挙定数
 
 int APIENTRY WinMain(
-	_In_ HINSTANCE hInstance, // 現在のインスタンスのハンドル
-	_In_opt_ HINSTANCE hPrevInstance, // 前のインスタンスのハンドル
-	_In_ LPSTR lpCmdLine, // コマンドライン引数
-	_In_ int nCmdShow // ウィンドウの表示状態
+	_In_ HINSTANCE hInstance,			// 現在のインスタンスのハンドル
+	_In_opt_ HINSTANCE hPrevInstance,	// 前のインスタンスのハンドル
+	_In_ LPSTR lpCmdLine,				// コマンドライン引数
+	_In_ int nCmdShow					// ウィンドウの表示状態
 )
 
 {
-	SetWindowText("Nuku"); // ウィンドウのタイトル
-
-	SetGraphMode(WIDTH, HEIGHT, 32); // ウィンドウの大きさとカラービット数の指定
-	ChangeWindowMode(true); // ウィンドウモードで起動
-	if (DxLib_Init() == -1) return -1; // ライブラリ初期化 エラーが起きたら終了
-	SetBackgroundColor(0, 255, 0); // 背景色の指定
-	SetDrawScreen(DX_SCREEN_BACK); // 描画面を裏画面にする
+	SetWindowText("Nuku");				// ウィンドウのタイトル
+	SetGraphMode(WIDTH, HEIGHT, 32);	// ウィンドウの大きさとカラービット数の指定
+	ChangeWindowMode(true);				// ウィンドウモードで起動
+	if (DxLib_Init() == -1) return -1;	// ライブラリ初期化 エラーが起きたら終了
+	SetBackgroundColor(0, 255, 0);		// 背景色の指定
+	SetDrawScreen(DX_SCREEN_BACK);		// 描画面を裏画面にする
 
 	// 変数の宣言
-	int score = 0; // スコア
-	int timer = 0; // 経過時間を数える変数
-	int scrollSpeed = 24; //WaitTimer用
-
-	int scene = TITLE; // 起動時に最初に遷移されるシーン
+	int score = 0;			// スコア
+	int highScore = 12000;	// ハイスコア
+	int timer = 0;			// 経過時間を数える変数
+	int scrollSpeed = 16;	// WaitTimer用
+	int scene = TITLE;		// 起動時に最初に遷移されるシーン
 
 	// 画像の用意↓
 	
@@ -67,13 +65,20 @@ int APIENTRY WinMain(
 	// 泣いているネコチャンの画像
 	int imgCryNeko = LoadGraphWithCheck("image/neko5.png");
 
-	// バツマークの画像
-	int imgX = LoadGraphWithCheck("image/X.png");
+	// マニュアル画像
+	int imgManual = LoadGraphWithCheck("image/manual.png");
 
 	// 効果音・BGMを読み込む
-	int bgm = LoadSoundMemWithCheck("sound/bgm.mp3"); // BGM(仮)
-	int decideSE = LoadSoundMemWithCheck("sound/decide.mp3"); // 決定時の効果音
-	int backSE = LoadSoundMemWithCheck("sound/back.mp3"); // タイトルシーン遷移時の効果音
+	int bgm = LoadSoundMemWithCheck("sound/bgm.mp3");			// BGM(仮)
+	int decideSE = LoadSoundMemWithCheck("sound/decide.mp3");	// 決定時の効果音
+	int backSE = LoadSoundMemWithCheck("sound/back.mp3");		// タイトルシーン遷移時の効果音
+	int manualSE = LoadSoundMemWithCheck("sound/manual.mp3");	// マニュアルシーン遷移時の効果音
+	int pullSE = LoadSoundMemWithCheck("sound/pull2.mp3");		// よく使う効果音
+	int expSE = LoadSoundMemWithCheck("sound/explosion.mp3");	// 爆発の効果音
+	int overSE = LoadSoundMemWithCheck("sound/over.mp3");		// ゲームオーバー時の効果音
+	//int pullSE = LoadSoundMemWithCheck("sound/pull.mp3");		//
+	ChangeVolumeSoundMem(255, bgm);
+	ChangeVolumeSoundMem(180, pullSE);
 
 	// 荷物の座標用の変数
 	int bagX = 980;
@@ -85,6 +90,15 @@ int APIENTRY WinMain(
 	// ネコちゃんの座標用の変数
 	int nekoX = WIDTH / 2 - 73;
 	int nekoY = 40;
+
+	// コンベアの速度(荷物もこの速度で動く)
+	int spd = 5;
+
+	// キャッチ判定の移動用
+	int cx = WIDTH / 2;
+
+	// 残機用の変数
+	int life = 3;
 
 	// 乱数の初期化
 	srand((unsigned int)time(NULL));
@@ -104,26 +118,36 @@ int APIENTRY WinMain(
 
 		// 背景
 		static int bgX;
-		int spd = 12;
 		bgX = (bgX - spd * 1) % WIDTH;
-		DrawGraph(bgX + WIDTH, 0, imgBG, false); // 背景の表示
-		DrawGraph(bgX, 0, imgBG, false); //
+		DrawGraph(bgX + WIDTH, 0, imgBG, false);	// 背景の表示
+		DrawGraph(bgX, 0, imgBG, false);			//
 
 		// ネコチャンを表示
-		DrawGraph(nekoX, nekoY, imgNeko[(timer / 6) % 4], true);
+		if (scene == OVER)
+		{
+			DrawGraph(nekoX, nekoY, imgCryNeko, true);
+		}
+		else
+		{
+			DrawGraph(nekoX, nekoY, imgNeko[(timer / 6) % 4], true);
+		}
 
-		// 当たり判定
-		int x1 = bagX + 94, y1 = bagY + 100, r1 = 50, col1 = GetColor(0, 0, 255);
-		int x2 = WIDTH / 2, y2 = HEIGHT / 2, r2 = 120;
+		// 荷物の当たり判定
+		int x1 = bagX + 94, y1 = bagY + 100, r1 = 25;
+
+		// キャッチ判定
+		int x2 = cx, y2 = HEIGHT / 2, r2 = 80;
+
+		// ↑上2つの接触判定
 		int d = sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2));
 
 		// シーンごとに処理を分岐
 		switch (scene)
 		{
-
 		// タイトル画面の処理
 		case TITLE:
 
+			// タイトルテキスト表示
 			DrawTextC(WIDTH * 0.5, HEIGHT * 0.3 + 68, "CHECK-IN!", 0x00ffff, 105);
 
 			if (timer % 50 < 25)
@@ -131,77 +155,225 @@ int APIENTRY WinMain(
 				DrawTextC(WIDTH * 0.5, HEIGHT / 2 + 85, "スペースキーを押してスタート", 0xffffff, 42);
 			}
 
+			DrawTextC(WIDTH * 0.5 + 280, HEIGHT * 0.3 + 420, "Mキーでマニュアルを開く", 0xffffff, 30);
+
 			// スペースキーが押された時の処理
-			if (CheckHitKey(KEY_INPUT_SPACE))
+			if (CheckHitKey(KEY_INPUT_SPACE) == 1)
 			{
 				scene = PLAY;
+				cx = WIDTH / 2;
 				PlaySoundMem(decideSE, DX_PLAYTYPE_BACK);
+				PlaySoundMem(bgm, DX_PLAYTYPE_LOOP); // BGM再生開始(ループ)
+				ChangeVolumeSoundMem(255, bgm);
+			}
+			else if (CheckHitKey(KEY_INPUT_M) == 1)
+			{
+				scene = MANUAL;
+				PlaySoundMem(manualSE, DX_PLAYTYPE_BACK);
 			}
 			break;
 
 		// ゲームプレイ画面の処理
 		case PLAY:
-
+			
 			// 荷物を動かす処理
 			bagX = bagX - spd * 2;
 			
 			if (bagX < 0 - 200)
 			{
 				bagX = 980;
+				spd = GetRand(2) + 11;
+				cx = GetRand(WIDTH / 2 - 300) + 400;
 
+				// 荷物ごとのスコアの振り分け
 				if (currentBag == 69992458) // なにこれ
 				{
-					score -= 10;
+					score += 20;
+					spd = GetRand(2) + 10;
+					cx = GetRand(WIDTH / 2 - 250) + 400;
 				}
 				else
 				{
-					score += 10;
+					//score -= 10;
+					life -= 1;
+					spd = GetRand(2) + 10;
+					cx = GetRand(WIDTH / 2 - 250) + 400;
+					PlaySoundMem(expSE, DX_PLAYTYPE_BACK);
 				}
 				currentBag = imgBag[GetRand(8 - 1)];
 			}
 
+			// スペースキーが押されたかつ、キャッチ判定と荷物の当たり判定が触れた時の処理
 			if (CheckHitKey(KEY_INPUT_SPACE) == 1 && d <= r1 + r2)
 			{
-
+				if (currentBag == 69992458)
+				{
+					bagX = 980;
+					life -= 1;
+					currentBag = imgBag[GetRand(8 - 1)];
+					spd = GetRand(2) + 10;
+					cx = GetRand(WIDTH / 2 - 250) + 400;
+					PlaySoundMem(pullSE, DX_PLAYTYPE_BACK);
+					PlaySoundMem(expSE, DX_PLAYTYPE_BACK);
+				}
+				else
+				{
+					bagX = 980;
+					score += 20;
+					currentBag = imgBag[GetRand(8 - 1)];
+					spd = GetRand(2) + 10;
+					cx = GetRand(WIDTH / 2 - 250) + 400;
+					PlaySoundMem(pullSE, DX_PLAYTYPE_BACK);
+				}
 			}
 			else
 			{
 				DrawGraph(bagX, bagY, currentBag, true);
 			}
 
-			// 当たり判定を描画
-			DrawCircle(x1, y1, r1, col1, true);
-
-			SetDrawBlendMode(DX_BLENDMODE_ADD, 255);
-			DrawCircle(x2, y2, r2, RED, true);
+			// 当たり安定を描画
+			SetDrawBlendMode(DX_BLENDMODE_ADD, 64);
+			//DrawCircle(x1, y1, r1, RED, true);
+			DrawCircle(x2, y2, r2, WHITE, true);
 			SetDrawBlendMode(DX_BLENDMODE_NOBLEND, 0);
 
 			// スコアを表示
-			DrawTextB(68, 20, "スコア：%d", score, 0xffffff, 35);
-			//DrawTextB(120, 50, "currentBag：%d", currentBag, 0xffffff, 35);
+			DrawTextB(100, 20, "スコア：%d", score, 0xffffff, 35);
 
-			// スペースキーが押されたことを確認するための仮テキスト
-			DrawTextB(180, 60, "キーが押された：%d", currentSpace, 0xffffff, 20);
-
-			// スペースキーが押されたことを確認するための仮コード
-			if (CheckHitKey(KEY_INPUT_SPACE) == 1)
+			// ハイスコアの表示
+			if (score > highScore)
 			{
-				currentSpace = 1;
+				highScore = score; // ハイスコアを超えた時の処理
+				DrawTextB(747, 20, "ハイスコア：%d", highScore, 0xffff00, 35);
 			}
 			else
 			{
-				currentSpace = 0;
+				DrawTextB(747, 20, "ハイスコア：%d", highScore, 0xffffff, 35);
+			}
+
+			// 残機を表示
+			if (life > 1)
+			{
+				DrawTextB(153, 600, "残りライフ：%d", life, 0xffffff, 33);
+			}
+			else
+			{
+				DrawTextB(153, 600, "残りライフ：%d", life, 0xff0000, 33);
+			}
+
+			if (life == 0)
+			{
+				scene = OVER;
+				timer = 0;
+				PlaySoundMem(overSE, DX_PLAYTYPE_BACK);
+			}
+			break;
+
+		// ゲームオーバー画面の処理
+		case(OVER):
+
+			// 一時的に消音
+			ChangeVolumeSoundMem(0, bgm);
+			spd = 0;
+
+			// ゲームオーバーテキスト表示
+			DrawTextC(WIDTH * 0.5, HEIGHT * 0.3 + 60 , "ゲームオーバー", 0xff0000, 80);
+
+			// 選択肢の表示
+			DrawTextC(WIDTH * 0.5, HEIGHT / 2 + 170, "Tキーでタイトルに戻る", 0xffffff, 35);
+			DrawTextC(WIDTH * 0.5, HEIGHT / 2 + 220, "Rキーでもう一度やり直す", 0xffffff, 35);
+
+			// スコア別ランク付け
+			if (score <= 100)
+			{
+				DrawTextB(WIDTH * 0.5 + 40, HEIGHT / 2 + 20, "スコア：%d　やる気あんの？", score, 0xffffff, 30);
+			}
+			else if (score <= 300)
+			{
+				DrawTextB(WIDTH * 0.5 + 20, HEIGHT / 2 + 20, "スコア：%d　新入社員級", score, 0xffffff, 30);
+			}
+			else if (score <= 800)
+			{
+				DrawTextB(WIDTH * 0.5 + 20, HEIGHT / 2 + 20, "スコア：%d　入社1年目級", score, 0xffffff, 30);
+			}
+			else if (score <= 1500)
+			{
+				DrawTextB(WIDTH * 0.5 + 30, HEIGHT / 2 + 20, "スコア：%d　カスミソウ級", score, 0xffffff, 30);
+			}
+			else if (score <= 3000)
+			{
+				DrawTextB(WIDTH * 0.5 + 30, HEIGHT / 2 + 20, "スコア：%d　クレマチス級", score, 0xffffff, 30);
+			}
+			else if (score <= 5000)
+			{
+				DrawTextB(WIDTH * 0.5 + 30, HEIGHT / 2 + 20, "スコア：%d　アマリリス級", score, 0xffffff, 30);
+			}
+			else if (score <= 10000)
+			{
+				DrawTextB(WIDTH * 0.5 + 30, HEIGHT / 2 + 20, "スコア：%d　テランセラ級", score, 0xffffff, 30);
+			}
+			else if (score >= 10000)
+			{
+				DrawTextB(WIDTH * 0.5 + 40, HEIGHT / 2 + 20, "スコア：%d　キバナコスモス級", score, 0xffffff, 30);
+			}
+
+			// Tキーが押されたらタイトルシーンへ遷移する
+			if (CheckHitKey(KEY_INPUT_T) == 1)
+			{
+				// ここで値を初期化
+				timer = 0;
+				cx = WIDTH / 2;
+				spd = 5;
+				scene = TITLE;
+				life = 3;
+				score = 0;
+				PlaySoundMem(backSE, DX_PLAYTYPE_BACK);
+				StopSoundMem(bgm); //BGM再生停止
+			}
+
+			// Rキーが押されたら再びゲームシーンへ遷移する
+			else if (CheckHitKey(KEY_INPUT_R) == 1)
+			{
+				// ここで値を初期化
+				scene = PLAY;
+				cx = WIDTH / 2;
+				spd = 5;
+				life = 3;
+				score = 0;
+				PlaySoundMem(decideSE, DX_PLAYTYPE_BACK);
+				ChangeVolumeSoundMem(255, bgm);
+			}
+			break;
+
+		// マニュアル画面の処理
+		case(MANUAL):
+
+			if (CheckHitKey(KEY_INPUT_T) == 1)
+			{
+				// ここで値を初期化
+				timer = 0;
+				cx = WIDTH / 2;
+				spd = 5;
+				scene = TITLE;
+				life = 3;
+				score = 0;
+				PlaySoundMem(backSE, DX_PLAYTYPE_BACK);
+			}
+			else
+			{
+				DrawGraph(0, 0, imgManual, true);
+				DrawTextC(WIDTH * 0.5 + 250, HEIGHT * 0.3 + 420, "Tキーでマニュアルを閉じるよ", 0xffffff, 30);
 			}
 		}
 
 		ScreenFlip(); // 裏画面の内容を表画面に反映させる
 		WaitTimer(scrollSpeed); // 一定時間待つ 初期値は24
 		if (ProcessMessage() == -1) break; // Windowsから情報を受け取りエラーが起きたら終了
-		if (CheckHitKey(KEY_INPUT_ESCAPE) == 1) break; // ESCキーが押されたら終了
+		if (CheckHitKey(KEY_INPUT_ESCAPE) == 1 && scene == TITLE) break; // ESCキーが押されたら終了
 	}
 
-	DxLib_End(); // DXライブラリ使用の終了処理
-	return 0; // ソフトの終了
+	DxLib_End();	// DXライブラリ使用の終了処理
+	return 0;		// ソフトの終了
 }
 
 // ここから下は自作した関数を記述するスペース↓
